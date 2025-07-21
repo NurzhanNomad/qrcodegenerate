@@ -1,4 +1,0 @@
-Flask>=2.2
-qrcode
-Pillow
-reportlab 
