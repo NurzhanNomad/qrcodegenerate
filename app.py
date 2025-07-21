@@ -1,4 +1,4 @@
-os
+import os
 import io
 from flask import Flask, render_template, request, send_file
 from PIL import Image, ImageDraw, ImageFont
@@ -83,14 +83,38 @@ def create_label_image(text, width_px=500, height_px=600, font_size=55):
     img.paste(small_qr, (0, height_px - small_qr_size))
     img.paste(small_qr, (width_px - small_qr_size, height_px - small_qr_size))
 
-    # Текст
+    # Текст - увеличиваем размер до 85% ширины этикетки
     draw = ImageDraw.Draw(img)
-    
-    # Сначала определим размер шрифта для основного текста
     text_width = draw.textlength(text, font=font)
     temp_font_size = font_size
     temp_font = font
-    while text_width > width_px - 40 and temp_font_size > 6:
+    
+    # Целевая ширина - 85% от ширины этикетки
+    target_width = int(width_px * 0.85)
+    
+    # Увеличиваем размер шрифта, если текст помещается в 85% ширины
+    while text_width < target_width and temp_font_size < 200:
+        temp_font_size += 2
+        for font_path in FONT_PATHS:
+            try:
+                temp_font = ImageFont.truetype(font_path, temp_font_size)
+                break
+            except Exception:
+                continue
+        new_text_width = draw.textlength(text, font=temp_font)
+        if new_text_width > target_width:
+            temp_font_size -= 2
+            for font_path in FONT_PATHS:
+                try:
+                    temp_font = ImageFont.truetype(font_path, temp_font_size)
+                    break
+                except Exception:
+                    continue
+            break
+        text_width = new_text_width
+    
+    # Если текст слишком широкий, уменьшаем размер
+    while text_width > target_width and temp_font_size > 6:
         temp_font_size -= 1
         for font_path in FONT_PATHS:
             try:
@@ -102,21 +126,8 @@ def create_label_image(text, width_px=500, height_px=600, font_size=55):
     
     # Основная надпись снизу
     text_x = (width_px - text_width) // 2
-    text_y = height_px - small_qr_size - 60  # поднять текст ещё выше над маленькими QR
+    text_y = height_px - small_qr_size - 60
     draw.text((text_x, text_y), text, font=temp_font, fill='black')
-    
-    # Маленькие подписи под угловыми QR-кодами того же размера
-    small_text_font = temp_font  # Используем тот же размер шрифта
-    
-    # Подпись под левым верхним QR
-    small_text_width = draw.textlength(text, font=small_text_font)
-    small_text_x = max(5, (small_qr_size - small_text_width) // 2)
-    small_text_y = small_qr_size + 5
-    draw.text((small_text_x, small_text_y), text, font=small_text_font, fill='black')
-    
-    # Подпись под правым верхним QR
-    small_text_x = width_px - small_qr_size + max(5, (small_qr_size - small_text_width) // 2)
-    draw.text((small_text_x, small_text_y), text, font=small_text_font, fill='black')
     return img
 
 def generate_labels(base, count):
@@ -234,4 +245,4 @@ def next_number():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)  
+    app.run(host='0.0.0.0', port=port, debug=False) 
