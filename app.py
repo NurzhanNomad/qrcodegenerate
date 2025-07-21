@@ -1,4 +1,4 @@
-import os
+os
 import io
 from flask import Flask, render_template, request, send_file
 from PIL import Image, ImageDraw, ImageFont
@@ -85,6 +85,8 @@ def create_label_image(text, width_px=500, height_px=600, font_size=55):
 
     # Текст
     draw = ImageDraw.Draw(img)
+    
+    # Сначала определим размер шрифта для основного текста
     text_width = draw.textlength(text, font=font)
     temp_font_size = font_size
     temp_font = font
@@ -97,9 +99,24 @@ def create_label_image(text, width_px=500, height_px=600, font_size=55):
             except Exception:
                 continue
         text_width = draw.textlength(text, font=temp_font)
+    
+    # Основная надпись снизу
     text_x = (width_px - text_width) // 2
     text_y = height_px - small_qr_size - 60  # поднять текст ещё выше над маленькими QR
     draw.text((text_x, text_y), text, font=temp_font, fill='black')
+    
+    # Маленькие подписи под угловыми QR-кодами того же размера
+    small_text_font = temp_font  # Используем тот же размер шрифта
+    
+    # Подпись под левым верхним QR
+    small_text_width = draw.textlength(text, font=small_text_font)
+    small_text_x = max(5, (small_qr_size - small_text_width) // 2)
+    small_text_y = small_qr_size + 5
+    draw.text((small_text_x, small_text_y), text, font=small_text_font, fill='black')
+    
+    # Подпись под правым верхним QR
+    small_text_x = width_px - small_qr_size + max(5, (small_qr_size - small_text_width) // 2)
+    draw.text((small_text_x, small_text_y), text, font=small_text_font, fill='black')
     return img
 
 def generate_labels(base, count):
@@ -217,4 +234,4 @@ def next_number():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False) 
+    app.run(host='0.0.0.0', port=port, debug=False)  
