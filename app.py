@@ -11,14 +11,26 @@ import json
 
 app = Flask(__name__)
 
-# Папка для шрифтов
-FONTS_DIR = os.path.join(os.path.dirname(__file__), 'fonts')
-FONT_PATHS = [
-    os.path.join(FONTS_DIR, 'arial.ttf'),
-    os.path.join(FONTS_DIR, 'calibri.ttf'),
-    os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
-    os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'calibri.ttf'),
-]
+# Настройка шрифтов для разных ОС
+def get_font_paths():
+    """Получаем пути к шрифтам в зависимости от ОС"""
+    import platform
+    
+    if platform.system() == 'Windows':
+        return [
+            os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'arial.ttf'),
+            os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts', 'calibri.ttf'),
+        ]
+    else:  # Linux/Unix (Render servers)
+        return [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+            '/System/Library/Fonts/Arial.ttf',  # macOS
+        ]
+
+FONT_PATHS = get_font_paths()
 
 # --- Генерация этикетки ---
 LABEL_WIDTH_MM = 50  # 5 см
@@ -56,16 +68,21 @@ def extract_prefix_and_number(art):
     num_len = len(m.group(2))
     return prefix, number, num_len
 
-def create_label_image(text, width_px=500, height_px=600, font_size=55):
-    font = None
+def get_font(size):
+    """Получаем шрифт нужного размера"""
     for font_path in FONT_PATHS:
         try:
-            font = ImageFont.truetype(font_path, font_size)
-            break
+            return ImageFont.truetype(font_path, size)
         except Exception:
             continue
-    if font is None:
-        font = ImageFont.load_default()
+    # Если ничего не найдено, используем дефолтный шрифт с увеличенным размером
+    try:
+        return ImageFont.load_default().font_variant(size=size)
+    except:
+        return ImageFont.load_default()
+
+def create_label_image(text, width_px=500, height_px=600, font_size=80):  # Увеличили базовый размер
+    font = get_font(font_size)
 
     img = Image.new('RGB', (width_px, height_px), 'white')
     # Главный QR-код по центру
@@ -85,43 +102,30 @@ def create_label_image(text, width_px=500, height_px=600, font_size=55):
 
     # Текст - увеличиваем размер до 85% ширины этикетки
     draw = ImageDraw.Draw(img)
-    text_width = draw.textlength(text, font=font)
-    temp_font_size = font_size
-    temp_font = font
     
     # Целевая ширина - 85% от ширины этикетки
     target_width = int(width_px * 0.85)
     
-    # Увеличиваем размер шрифта, если текст помещается в 85% ширины
-    while text_width < target_width and temp_font_size < 200:
-        temp_font_size += 2
-        for font_path in FONT_PATHS:
-            try:
-                temp_font = ImageFont.truetype(font_path, temp_font_size)
-                break
-            except Exception:
-                continue
+    temp_font_size = font_size
+    temp_font = font
+    text_width = draw.textlength(text, font=temp_font)
+    
+    # Увеличиваем размер шрифта, пока текст помещается в 85% ширины
+    while text_width < target_width and temp_font_size < 300:
+        temp_font_size += 3
+        temp_font = get_font(temp_font_size)
         new_text_width = draw.textlength(text, font=temp_font)
         if new_text_width > target_width:
-            temp_font_size -= 2
-            for font_path in FONT_PATHS:
-                try:
-                    temp_font = ImageFont.truetype(font_path, temp_font_size)
-                    break
-                except Exception:
-                    continue
+            # Откатываемся назад
+            temp_font_size -= 3
+            temp_font = get_font(temp_font_size)
             break
         text_width = new_text_width
     
     # Если текст слишком широкий, уменьшаем размер
-    while text_width > target_width and temp_font_size > 6:
-        temp_font_size -= 1
-        for font_path in FONT_PATHS:
-            try:
-                temp_font = ImageFont.truetype(font_path, temp_font_size)
-                break
-            except Exception:
-                continue
+    while text_width > target_width and temp_font_size > 20:
+        temp_font_size -= 2
+        temp_font = get_font(temp_font_size)
         text_width = draw.textlength(text, font=temp_font)
     
     # Основная надпись снизу
